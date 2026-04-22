@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 BINDIR  = $(PREFIX)/bin
 
-PROGRAMS = date clock uptime brightness sep mailbox cpu mem disk battery ip
+PROGRAMS = date clock uptime brightness sep mailbox cpu mem disk battery ip moonphase ping
 
 all: $(PROGRAMS)
 

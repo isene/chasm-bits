@@ -130,7 +130,8 @@ _start:
     div rcx                               ; rax = whole hours, rdx = tenth
     push rdx
     mov byte [rdi], ' '
-    inc rdi
+    mov byte [rdi+1], ' '
+    add rdi, 2
     call itoa
     mov byte [rdi], '.'
     inc rdi
@@ -146,7 +147,8 @@ _start:
     test r14, r14
     jz .skip_watts
     mov byte [rdi], ' '
-    inc rdi
+    mov byte [rdi+1], ' '
+    add rdi, 2
     ; centi-W = power_now / 10000  (µW → 1/100 of W).
     mov rax, r14
     xor edx, edx

@@ -129,10 +129,12 @@ _start:
     xor edx, edx
     div rcx                               ; rax = whole hours, rdx = tenth
     push rdx
+    ; One literal space + pad whole-hours integer to 2 chars so single-
+    ; digit (5h) and double-digit (12h) take the same width.
     mov byte [rdi], ' '
-    mov byte [rdi+1], ' '
-    add rdi, 2
-    call itoa
+    inc rdi
+    mov ecx, 2
+    call itoa_pad
     mov byte [rdi], '.'
     inc rdi
     pop rdx
@@ -147,8 +149,7 @@ _start:
     test r14, r14
     jz .skip_watts
     mov byte [rdi], ' '
-    mov byte [rdi+1], ' '
-    add rdi, 2
+    inc rdi
     ; centi-W = power_now / 10000  (µW → 1/100 of W).
     mov rax, r14
     xor edx, edx
@@ -158,7 +159,8 @@ _start:
     xor edx, edx
     div rcx                               ; rax = whole W, rdx = hundredths
     push rdx
-    call itoa
+    mov ecx, 2                            ; pad integer part to 2 chars
+    call itoa_pad
     mov byte [rdi], '.'
     inc rdi
     pop rdx

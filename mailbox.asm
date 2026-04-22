@@ -16,6 +16,11 @@
 
 section .data
 mail_path: db "/home/geir/.mail2", 0
+lock_path: db "/home/geir/.mail.lock", 0
+dot_str:   db "."
+dot_len    equ $ - dot_str
+sp_str:    db " "
+sp_len     equ $ - sp_str
 
 ; 24-bit RGB SGR escapes — exact match to user's conky palette.
 ;   G #fbbd8f → 251;189;143
@@ -51,6 +56,49 @@ _start:
     test al, al
     jz .die
     mov bl, al                           ; rbx low byte = letter (callee-saved)
+
+    ; Optional argv[2] = "--dot": prepend "." if ~/.mail.lock exists,
+    ; else " " (always one char so the segment width stays constant).
+    cmp qword [rsp], 3
+    jl .no_dot
+    mov rsi, [rsp + 24]
+    cmp byte [rsi + 0], '-'
+    jne .no_dot
+    cmp byte [rsi + 1], '-'
+    jne .no_dot
+    cmp byte [rsi + 2], 'd'
+    jne .no_dot
+    cmp byte [rsi + 3], 'o'
+    jne .no_dot
+    cmp byte [rsi + 4], 't'
+    jne .no_dot
+    ; Try to open lock_path; presence = mail_fetch is running.
+    push rbx
+    mov rax, SYS_OPEN
+    lea rdi, [lock_path]
+    xor esi, esi
+    xor edx, edx
+    syscall
+    test rax, rax
+    js .dot_off
+    mov rdi, rax
+    mov rax, SYS_CLOSE
+    syscall
+    mov rax, SYS_WRITE
+    mov rdi, 1
+    lea rsi, [dot_str]
+    mov rdx, dot_len
+    syscall
+    pop rbx
+    jmp .no_dot
+.dot_off:
+    mov rax, SYS_WRITE
+    mov rdi, 1
+    lea rsi, [sp_str]
+    mov rdx, sp_len
+    syscall
+    pop rbx
+.no_dot:
 
     ; Open + read ~/.mail2.
     mov rax, SYS_OPEN

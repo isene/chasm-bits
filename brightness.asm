@@ -12,8 +12,8 @@
 section .data
 path_cur: db "/sys/class/backlight/intel_backlight/brightness", 0
 path_max: db "/sys/class/backlight/intel_backlight/max_brightness", 0
-prefix:   db "B:"                       ; ASCII (strip's "fixed" font is ISO 8859 only)
-prefix_len equ 2
+prefix:   db 0xE2, 0x98, 0xBC          ; UTF-8 ☼ (BLACK SUN WITH RAYS)
+prefix_len equ 3
 
 section .bss
 buf:     resb 32
@@ -37,11 +37,12 @@ _start:
     xor edx, edx
     div r13                             ; eax = percent
 
-    ; Format "B:N%\n" into out_buf (itoa advances rdi in place).
+    ; Format "☼N%\n" into out_buf (itoa advances rdi in place).
     lea rdi, [out_buf]
-    mov byte [rdi], 'B'
-    mov byte [rdi+1], ':'
-    add rdi, 2
+    mov byte [rdi], 0xE2
+    mov byte [rdi+1], 0x98
+    mov byte [rdi+2], 0xBC
+    add rdi, 3
     mov ecx, 3
     call itoa_pad
     mov byte [rdi], '%'

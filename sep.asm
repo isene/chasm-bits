@@ -1,6 +1,6 @@
 ; sep - print a coloured vertical-bar separator and exit.
-; Output: "\033[34m|\033[0m\n"  → "|" in blue (SGR 34), reset.
-; strip's ANSI SGR decoder colours it accordingly.
+; Output: ESC[38;2;100;100;100m|ESC[0m\n  → "|" in mid-grey, reset.
+; strip's SGR decoder switches GC fg per the embedded escape.
 ;
 ; Build: nasm -f elf64 sep.asm -o sep.o && ld sep.o -o sep
 
@@ -8,7 +8,7 @@
 %define SYS_EXIT  60
 
 section .data
-out: db 27, "[34m|", 27, "[0m", 10
+out: db 27, "[38;2;100;100;100m|", 27, "[0m", 10
 out_len equ $ - out
 
 section .text

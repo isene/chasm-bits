@@ -17,12 +17,24 @@
 section .data
 mail_path: db "/home/geir/.mail2", 0
 
-sgr_G: db 27, "[33m"            ; yellow/orange (Gmail)
-sgr_A: db 27, "[34m"            ; blue
-sgr_P: db 27, "[35m"            ; magenta
-sgr_D: db 27, "[36m"            ; cyan
-sgr_dim: db 27, "[90m"          ; bright black (dim) for zero
-sgr_reset: db 27, "[0m", 10     ; reset + newline
+; 24-bit RGB SGR escapes — exact match to user's conky palette.
+;   G #fbbd8f → 251;189;143
+;   A #8fa7fb → 143;167;251
+;   P #ce8ffb → 206;143;251
+;   D #51c1b7 →  81;193;183
+;   dim       → 153;153;153
+sgr_G:   db 27, "[38;2;251;189;143m"
+sgr_G_len equ $ - sgr_G
+sgr_A:   db 27, "[38;2;143;167;251m"
+sgr_A_len equ $ - sgr_A
+sgr_P:   db 27, "[38;2;206;143;251m"
+sgr_P_len equ $ - sgr_P
+sgr_D:   db 27, "[38;2;81;193;183m"
+sgr_D_len equ $ - sgr_D
+sgr_dim: db 27, "[38;2;153;153;153m"
+sgr_dim_len equ $ - sgr_dim
+sgr_reset: db 27, "[0m", 10
+sgr_reset_len equ $ - sgr_reset
 
 section .bss
 buf:        resb 256
@@ -125,27 +137,33 @@ _start:
     je .clr_P
     cmp bl, 'D'
     je .clr_D
+    ; r12 = ptr to escape, rbp = length
 .colour_dim:
     lea r12, [sgr_dim]
+    mov ebp, sgr_dim_len
     jmp .colour_set
 .clr_G:
     lea r12, [sgr_G]
+    mov ebp, sgr_G_len
     jmp .colour_set
 .clr_A:
     lea r12, [sgr_A]
+    mov ebp, sgr_A_len
     jmp .colour_set
 .clr_P:
     lea r12, [sgr_P]
+    mov ebp, sgr_P_len
     jmp .colour_set
 .clr_D:
     lea r12, [sgr_D]
+    mov ebp, sgr_D_len
 .colour_set:
 
-    ; Write SGR colour escape (5 bytes).
+    ; Write SGR colour escape (variable length).
     mov rax, SYS_WRITE
     mov rdi, 1
     mov rsi, r12
-    mov rdx, 5
+    mov edx, ebp
     syscall
 
     ; Write line content [buf + r14 .. buf + r15).
@@ -157,11 +175,11 @@ _start:
     add rsi, r14
     syscall
 
-    ; Write reset + LF (5 bytes).
+    ; Write reset + LF.
     mov rax, SYS_WRITE
     mov rdi, 1
     lea rsi, [sgr_reset]
-    mov rdx, 5
+    mov rdx, sgr_reset_len
     syscall
 
 .die:

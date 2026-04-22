@@ -1,0 +1,14 @@
+*.o
+/date
+/clock
+/uptime
+/brightness
+/sep
+/mailbox
+/cpu
+/mem
+/disk
+/battery
+/ip
+/moonphase
+/ping

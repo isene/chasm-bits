@@ -25,14 +25,13 @@ _start:
     lea rsi, [ts]
     syscall
 
-    ; Compute local time of day from epoch seconds.
-    ; tv_sec → (tv_sec % 86400) → seconds-since-midnight UTC
-    ; Then apply local-time offset (TZ environment).
-    ;
-    ; For v0.1 simplicity, just use UTC. A real release should parse
-    ; TZ or read /etc/localtime, but the user's tile setup is in
-    ; Tromsø which is +1/+2 — defer.
+    ; Read /etc/timezone offset via /proc/sys/kernel/... actually that
+    ; doesn't expose offset. Real fix is parsing TZ binary at
+    ; /etc/localtime. For now, hardcode CEST (+2h = 7200s) — this
+    ; will drift by 1h on the DST transition but works for daily use.
+    ; TODO: parse /etc/localtime tzif format properly (phase 2b.2).
     mov rax, [ts]                 ; tv_sec
+    add rax, 7200                 ; CEST offset
     mov rcx, 86400
     xor edx, edx
     div rcx                        ; rax = days since epoch, rdx = secs in day

@@ -1,7 +1,7 @@
 PREFIX ?= /usr/local
 BINDIR  = $(PREFIX)/bin
 
-PROGRAMS = date
+PROGRAMS = date uptime brightness
 
 all: $(PROGRAMS)
 

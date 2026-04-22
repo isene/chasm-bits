@@ -218,6 +218,8 @@ _start:
     add al, '0'
     mov [rdi], al
     inc rdi
+    mov byte [rdi], ' '                   ; one extra space after week.day
+    inc rdi
     mov byte [rdi], 10
     inc rdi
     lea rdx, [out_buf]

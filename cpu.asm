@@ -139,7 +139,7 @@ _start:
     mov rcx, prefix_len
     call copy_n
     mov rax, r12
-    mov ecx, 3
+    mov ecx, 2
     call itoa_pad
     mov byte [rdi], '%'
     inc rdi

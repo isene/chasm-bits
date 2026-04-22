@@ -56,11 +56,12 @@ _start:
     mul r8                                ; rdx:rax = bavail * bsize
     mov r13, rax                          ; assume fits in 64 bits
 
-    ; Format "D:<pct>% <free><unit>\n".
+    ; Format " D:<pct>% <free><unit>\n" (leading space for visual gap).
     lea rdi, [out_buf]
-    mov byte [rdi], 'D'
-    mov byte [rdi+1], ':'
-    add rdi, 2
+    mov byte [rdi], ' '
+    mov byte [rdi+1], 'D'
+    mov byte [rdi+2], ':'
+    add rdi, 3
     mov rax, r12
     mov ecx, 3
     call itoa_pad

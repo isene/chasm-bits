@@ -37,12 +37,13 @@ _start:
     xor edx, edx
     div r13                             ; eax = percent
 
-    ; Format "☼N%\n" into out_buf (itoa advances rdi in place).
+    ; Format " ☼N%\n" into out_buf (leading space + itoa advances rdi).
     lea rdi, [out_buf]
-    mov byte [rdi], 0xE2
-    mov byte [rdi+1], 0x98
-    mov byte [rdi+2], 0xBC
-    add rdi, 3
+    mov byte [rdi], ' '
+    mov byte [rdi+1], 0xE2
+    mov byte [rdi+2], 0x98
+    mov byte [rdi+3], 0xBC
+    add rdi, 4
     mov ecx, 3
     call itoa_pad
     mov byte [rdi], '%'

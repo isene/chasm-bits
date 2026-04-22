@@ -139,7 +139,8 @@ _start:
     mov rcx, prefix_len
     call copy_n
     mov rax, r12
-    call itoa
+    mov ecx, 3
+    call itoa_pad
     mov byte [rdi], '%'
     inc rdi
     mov byte [rdi], ' '
@@ -151,7 +152,8 @@ _start:
     cmp r13, 0
     jl .skip_temp
     mov rax, r13
-    call itoa
+    mov ecx, 2
+    call itoa_pad
     mov byte [rdi], 0xC2                  ; UTF-8 ° = 0xC2 0xB0
     mov byte [rdi+1], 0xB0
     add rdi, 2
@@ -308,6 +310,43 @@ copy_str:
     ret
 
 ; rax = number, rdi = buffer. Advances rdi past the digits.
+; rax = num, rdi = buf, ecx = min width. Writes leading spaces if
+; needed then the decimal digits; advances rdi past the result.
+itoa_pad:
+    push rbx
+    push r12
+    push r13
+    mov r12, rcx                          ; min width
+    ; Compute digit count → r13.
+    mov rax, rax                          ; (no-op, rax stays)
+    mov rbx, rax                          ; preserve original
+    mov r13, 1
+    mov rax, rbx
+    mov rcx, 10
+.ip_count:
+    cmp rax, 10
+    jb .ip_pad
+    xor edx, edx
+    div rcx
+    inc r13
+    jmp .ip_count
+.ip_pad:
+    mov rcx, r12
+    sub rcx, r13
+    jle .ip_emit
+.ip_pad_loop:
+    test rcx, rcx
+    jz .ip_emit
+    mov byte [rdi], ' '
+    inc rdi
+    dec rcx
+    jmp .ip_pad_loop
+.ip_emit:
+    mov rax, rbx
+    pop r13
+    pop r12
+    pop rbx
+    ; fall through into itoa
 itoa:
     push rbx
     push r12

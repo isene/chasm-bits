@@ -109,7 +109,8 @@ _start:
     mov byte [rdi], ' '
     inc rdi
     mov rax, r12
-    call itoa
+    mov ecx, 3
+    call itoa_pad
     mov byte [rdi], '%'
     inc rdi
 
@@ -311,6 +312,39 @@ build_path:
 .bp_done:
     pop rbx
     ret
+
+itoa_pad:
+    push rbx
+    push r12
+    push r13
+    mov r12, rcx
+    mov rbx, rax
+    mov r13, 1
+    mov rax, rbx
+    mov rcx, 10
+.ip_count:
+    cmp rax, 10
+    jb .ip_pad
+    xor edx, edx
+    div rcx
+    inc r13
+    jmp .ip_count
+.ip_pad:
+    mov rcx, r12
+    sub rcx, r13
+    jle .ip_emit
+.ip_pad_loop:
+    test rcx, rcx
+    jz .ip_emit
+    mov byte [rdi], ' '
+    inc rdi
+    dec rcx
+    jmp .ip_pad_loop
+.ip_emit:
+    mov rax, rbx
+    pop r13
+    pop r12
+    pop rbx
 
 itoa:
     push rbx

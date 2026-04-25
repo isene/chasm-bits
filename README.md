@@ -1,11 +1,18 @@
-# chasm-bits
+# chasm-bits — the asmites
+
+![Version](https://img.shields.io/badge/version-0.1.0-blue) ![Assembly](https://img.shields.io/badge/language-x86__64%20Assembly-purple) ![License](https://img.shields.io/badge/license-Unlicense-green) ![Platform](https://img.shields.io/badge/platform-Linux%20x86__64-blue) ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
 Tiny per-segment programs for the [`strip`](https://github.com/isene/tile)
 status bar. Part of the [CHasm](https://github.com/isene/chasm) suite.
 
+We call them **asmites**: little pieces of assembly, each a single
+focused tool that strip composes into a status row. Same idea as
+i3blocks blocklets or polybar modules, but each is a static x86_64
+ELF talking straight to the kernel.
+
 Each program is a single x86_64 NASM source file, no libc, pure
 syscalls. Each does ONE thing: read some piece of system state,
-format it, write it to stdout, exit. Static binaries, ~5-10 KB each.
+format it, write it to stdout, exit. Static binaries, ~5-13 KB each.
 
 `strip` spawns these as children on a refresh interval and reads their
 stdout. Output may include ANSI SGR escapes (`ESC[Nm`) for color;
@@ -22,6 +29,7 @@ strip parses them and switches GC foreground per text-run.
 | disk    | `statfs(2)` on `/`                             | free disk %                    |
 | ip      | `/proc/net/route` + `/proc/net/fib_trie`       | primary IPv4                   |
 | sep     | (no input)                                     | colored separator glyph        |
+| wintitle| X11 GetInputFocus + GetProperty(_NET_WM_NAME)  | focused window title — `--length N` truncates with mid-string `…` AND right-pads with spaces so the segment occupies a constant width (lets you put it leftmost without the rest of the bar shifting around) |
 
 ## Build
 

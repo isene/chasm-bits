@@ -187,8 +187,12 @@ _start:
     jle .iw_done
     mov r12, 1
 .iw_done:
-    ; Format "HH:MM  YYYY-MM-DD WW.D".
+    ; Format " HH:MM  YYYY-MM-DD WW.D" — leading space so strip's
+    ; concatenation with the previous segment leaves visual breathing
+    ; room.
     lea rdi, [out_buf]
+    mov byte [rdi], ' '
+    inc rdi
     mov rax, r13
     call write2
     mov byte [rdi], ':'

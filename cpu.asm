@@ -14,9 +14,16 @@
 section .data
 proc_stat:    db "/proc/stat", 0
 proc_load:    db "/proc/loadavg", 0
-thermal_path: db "/sys/class/thermal/thermal_zone0/temp", 0
 prefix:       db "C: "
 prefix_len    equ $ - prefix
+
+; Sensor names (newline-terminated to match what /sys writes). Walk in
+; order; first match wins. INT3400 / acpitz / TZ00 are Dell-style
+; control sensors that report a steady 20°C, so they're explicitly
+; excluded — falling back to zone0 would hit them.
+sensor_x86:    db "x86_pkg_temp", 10, 0
+sensor_coret:  db "coretemp", 10, 0
+sensor_tcpu:   db "TCPU", 10, 0
 
 section .bss
 buf1:    resb 256
@@ -25,6 +32,11 @@ load_buf: resb 64
 temp_buf: resb 32
 out_buf: resb 64
 sleep_ts: resq 2
+
+; Built per-invocation by find_cpu_zone: e.g. "/sys/class/thermal/thermal_zone11/temp\0"
+zone_path: resb 64
+zone_type_path: resb 64
+zone_type_buf:  resb 64
 
 section .text
 global _start
@@ -97,8 +109,13 @@ _start:
     mov byte [load_buf + rcx], 0
 .la_done:
 
-    ; Read thermal temp (millidegrees).
-    lea rdi, [thermal_path]
+    ; Find the CPU thermal zone (skip control sensors that report
+    ; constant 20°C). Builds zone_path = "/sys/class/thermal/thermal_zoneN/temp"
+    ; with N pointing at the matched zone, or fails the read otherwise.
+    call find_cpu_zone
+    test rax, rax
+    js .no_temp
+    lea rdi, [zone_path]
     lea rsi, [temp_buf]
     mov rdx, 32
     call read_file
@@ -202,6 +219,187 @@ read_file:
     xor eax, eax
     pop r12
     pop rbx
+    ret
+
+; Walk /sys/class/thermal/thermal_zone[0..15]/type, looking for the
+; CPU package sensor (x86_pkg_temp / coretemp / TCPU in that order).
+; On hit, builds zone_path = "/sys/class/thermal/thermal_zoneN/temp"
+; and returns 0 in rax. On miss returns -1 (caller skips the °).
+;
+; Why we don't fall back to zone0: on Dell laptops zone0 is INT3400
+; or acpitz, a control sensor that reports a constant ~20°C — that's
+; the bug we're fixing.
+find_cpu_zone:
+    push rbx
+    push r12
+    push r13
+    xor r12, r12                          ; zone iterator
+.fcz_loop:
+    cmp r12, 16
+    jge .fcz_miss
+    ; Build "/sys/class/thermal/thermal_zoneN/type"
+    lea rdi, [zone_type_path]
+    call build_type_path
+    ; Read the type file.
+    lea rdi, [zone_type_path]
+    lea rsi, [zone_type_buf]
+    mov rdx, 64
+    call read_file
+    test rax, rax
+    jle .fcz_next
+    mov byte [zone_type_buf + rax], 0     ; ensure NUL-terminated
+    ; Compare against each candidate sensor name.
+    lea rdi, [zone_type_buf]
+    lea rsi, [sensor_x86]
+    call str_eq
+    test eax, eax
+    jnz .fcz_match
+    lea rdi, [zone_type_buf]
+    lea rsi, [sensor_coret]
+    call str_eq
+    test eax, eax
+    jnz .fcz_match
+    lea rdi, [zone_type_buf]
+    lea rsi, [sensor_tcpu]
+    call str_eq
+    test eax, eax
+    jnz .fcz_match
+.fcz_next:
+    inc r12
+    jmp .fcz_loop
+.fcz_match:
+    ; Build "/sys/class/thermal/thermal_zoneN/temp" into zone_path.
+    lea rdi, [zone_path]
+    call build_temp_path
+    xor eax, eax
+    pop r13
+    pop r12
+    pop rbx
+    ret
+.fcz_miss:
+    mov rax, -1
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; rdi = dest buffer (≥ 64 bytes). r12 = zone index. Writes
+; "/sys/class/thermal/thermal_zoneN/type\0".
+build_type_path:
+    push rbx
+    mov rbx, rdi
+    lea rsi, [.btp_pre]
+    mov rcx, .btp_pre_len
+    call copy_n_local
+    mov rax, r12
+    call itoa_local                       ; advances rdi
+    lea rsi, [.btp_suf]
+    mov rcx, .btp_suf_len
+    call copy_n_local
+    mov byte [rdi], 0
+    mov rdi, rbx                          ; restore caller's dest pointer
+    pop rbx
+    ret
+.btp_pre: db "/sys/class/thermal/thermal_zone"
+.btp_pre_len equ $ - .btp_pre
+.btp_suf: db "/type"
+.btp_suf_len equ $ - .btp_suf
+
+; rdi = dest. r12 = zone index. Writes ".../thermal_zoneN/temp\0".
+build_temp_path:
+    push rbx
+    mov rbx, rdi
+    lea rsi, [.btp2_pre]
+    mov rcx, .btp2_pre_len
+    call copy_n_local
+    mov rax, r12
+    call itoa_local
+    lea rsi, [.btp2_suf]
+    mov rcx, .btp2_suf_len
+    call copy_n_local
+    mov byte [rdi], 0
+    mov rdi, rbx
+    pop rbx
+    ret
+.btp2_pre: db "/sys/class/thermal/thermal_zone"
+.btp2_pre_len equ $ - .btp2_pre
+.btp2_suf: db "/temp"
+.btp2_suf_len equ $ - .btp2_suf
+
+; rdi = dest, rsi = src, rcx = count. Copies and ADVANCES rdi.
+; Local copy because copy_n at the bottom doesn't preserve rsi the way
+; we need here (and we want a smaller blast radius than touching it).
+copy_n_local:
+.cnl_loop:
+    test rcx, rcx
+    jz .cnl_done
+    mov al, [rsi]
+    mov [rdi], al
+    inc rsi
+    inc rdi
+    dec rcx
+    jmp .cnl_loop
+.cnl_done:
+    ret
+
+; rax = number (≥ 0, fits in 8 digits), rdi = dest. Writes decimal
+; digits and ADVANCES rdi past them. Builds digits backwards into a
+; 16-byte stack scratch, then copies forward.
+itoa_local:
+    push rbx
+    push r12
+    push r13
+    sub rsp, 16
+    lea r13, [rsp + 16]                   ; one past end of digit buffer
+    mov rbx, 10
+    test rax, rax
+    jnz .il_loop
+    dec r13
+    mov byte [r13], '0'
+    jmp .il_emit
+.il_loop:
+    xor edx, edx
+    div rbx
+    add dl, '0'
+    dec r13
+    mov [r13], dl
+    test rax, rax
+    jnz .il_loop
+.il_emit:
+    lea r12, [rsp + 16]
+    sub r12, r13                          ; digit count
+.il_cp:
+    test r12, r12
+    jz .il_done
+    mov al, [r13]
+    mov [rdi], al
+    inc r13
+    inc rdi
+    dec r12
+    jmp .il_cp
+.il_done:
+    add rsp, 16
+    pop r13
+    pop r12
+    pop rbx
+    ret
+
+; rdi, rsi = NUL-terminated strings. Returns 1 in eax if equal, 0 otherwise.
+str_eq:
+.se_loop:
+    mov al, [rdi]
+    cmp al, [rsi]
+    jne .se_no
+    test al, al
+    je .se_yes
+    inc rdi
+    inc rsi
+    jmp .se_loop
+.se_yes:
+    mov eax, 1
+    ret
+.se_no:
+    xor eax, eax
     ret
 
 ; rdi = ptr to /proc/stat content. Parses the first "cpu " line.

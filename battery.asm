@@ -101,8 +101,17 @@ _start:
     mov rbx, rax
 .have_units:
 
-    ; Format the output. Start with status letter + space + capacity%.
+    ; Format the output. When charging, wrap the whole line in a
+    ; light-blue SGR (#5599ff) — matches the user's conky scheme so a
+    ; charging laptop is instantly distinguishable. strip parses ANSI
+    ; SGR including 24-bit RGB.
     lea rdi, [out_buf]
+    cmp r13b, 'C'
+    jne .no_charge_color
+    mov rsi, .charge_sgr
+    mov rcx, .charge_sgr_len
+    rep movsb
+.no_charge_color:
     mov al, r13b
     mov [rdi], al
     inc rdi
@@ -177,6 +186,15 @@ _start:
     inc rdi
 .skip_watts:
 
+    ; Close the charging colour span before the LF so the next segment
+    ; in the bar starts on its own colour.
+    cmp r13b, 'C'
+    jne .no_reset_sgr
+    mov rsi, .reset_sgr
+    mov rcx, .reset_sgr_len
+    rep movsb
+.no_reset_sgr:
+
     mov byte [rdi], 10
     inc rdi
     lea rdx, [out_buf]
@@ -190,6 +208,13 @@ _start:
     mov rax, SYS_EXIT
     xor edi, edi
     syscall
+
+; Charging-state SGR span. 24-bit RGB foreground = 0x5599ff, matches
+; the conky `${if_match Charging}` colour the user had before.
+.charge_sgr:     db 0x1b, "[38;2;85;153;255m"
+.charge_sgr_len  equ $ - .charge_sgr
+.reset_sgr:      db 0x1b, "[0m"
+.reset_sgr_len   equ $ - .reset_sgr
 
 ; rdi = NUL-terminated suffix (e.g. "/capacity"). Builds the full
 ; /sys/class/power_supply/<bat>/<suffix> path into path_buf, opens it,

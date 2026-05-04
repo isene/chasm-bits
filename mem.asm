@@ -159,7 +159,7 @@ find_value:
     inc rdi
     jmp .fv_skip_ws
 .fv_parse:
-    xor rax, rax
+    xor eax, eax
 .fv_dig:
     movzx ecx, byte [rdi]
     cmp cl, '0'

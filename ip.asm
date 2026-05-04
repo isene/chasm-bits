@@ -311,7 +311,7 @@ fetch_ssid:
     mov rax, SYS_CLOSE
     mov edi, r12d
     syscall
-    xor r14, r14                          ; bytes accumulated
+    xor r14d, r14d                          ; bytes accumulated
 .fs_read:
     mov rax, SYS_READ
     mov edi, ebx

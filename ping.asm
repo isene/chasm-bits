@@ -65,7 +65,7 @@ _start:
     mov rax, SYS_CLOSE
     mov edi, r12d
     syscall
-    xor r14, r14
+    xor r14d, r14d
 .read_loop:
     mov rax, SYS_READ
     mov edi, ebx
@@ -97,7 +97,7 @@ _start:
     ; Find needle in buf.
     test r14, r14
     jz .miss
-    xor rcx, rcx
+    xor ecx, ecx
 .find:
     cmp ecx, r14d
     jge .miss

@@ -122,7 +122,7 @@ _start:
     test rax, rax
     jle .no_temp
     ; Parse decimal millidegrees → integer degrees (round).
-    xor r13, r13
+    xor r13d, r13d
     xor ecx, ecx
 .tp_loop:
     cmp ecx, eax
@@ -233,7 +233,7 @@ find_cpu_zone:
     push rbx
     push r12
     push r13
-    xor r12, r12                          ; zone iterator
+    xor r12d, r12d                          ; zone iterator
 .fcz_loop:
     cmp r12, 16
     jge .fcz_miss
@@ -424,8 +424,8 @@ parse_cpu_jiffies:
     inc r12
     jmp .pcj_skip_sp
 .pcj_first_field:
-    xor rbx, rbx                          ; total
-    xor r13, r13                          ; idle
+    xor ebx, ebx                          ; total
+    xor r13d, r13d                          ; idle
     mov r8d, 0                            ; field index
 .pcj_loop:
     cmp r8d, 7
@@ -442,7 +442,7 @@ parse_cpu_jiffies:
     cmp al, '9'
     ja .pcj_done
     ; Parse one decimal number.
-    xor rax, rax
+    xor eax, eax
 .pcj_dig:
     movzx ecx, byte [r12]
     cmp cl, '0'

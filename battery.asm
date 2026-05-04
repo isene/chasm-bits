@@ -244,7 +244,7 @@ read_int_field:
     pop rcx
     test rcx, rcx
     jle .rif_zero
-    xor rax, rax
+    xor eax, eax
     xor edx, edx
 .rif_dig:
     cmp edx, ecx

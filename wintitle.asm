@@ -546,7 +546,7 @@ x11_connect:
     syscall
 
     ; Read connection setup reply.
-    xor r12, r12
+    xor r12d, r12d
 .xc_read:
     mov rax, SYS_READ
     mov rdi, [x11_fd]
@@ -731,7 +731,7 @@ read_reply:
     push rbx
     push r12
 .rr_read_loop:
-    xor r12, r12
+    xor r12d, r12d
 .rr_hdr:
     mov rax, SYS_READ
     mov rdi, [x11_fd]
@@ -825,8 +825,8 @@ write_truncated:
     ; Compute display width (UTF-8 codepoint count).
     mov r12, [title_len]                  ; byte count
     mov rsi, title_buf
-    xor r13, r13                          ; codepoint count
-    xor rcx, rcx
+    xor r13d, r13d                          ; codepoint count
+    xor ecx, ecx
 .wt_count:
     cmp rcx, r12
     jge .wt_count_done

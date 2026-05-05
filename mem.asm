@@ -88,13 +88,9 @@ _start:
 .have_sw:
     mov r13, rax                          ; sw_pct
 
-    ; Format "M:NN% NN%\n". Pad the mem% to 2 (was 3) so single-digit
-    ; mem reads "M: 6%" instead of "M:  6%". The 100% case still fits
-    ; (itoa_pad emits all needed digits even when wider than the pad).
+    ; Format "NN% NN%\n" — "M:" prefix dropped 2026-05-05 (segment colour
+    ; distinguishes mem from CPU/disk).
     lea rdi, [out_buf]
-    mov byte [rdi], 'M'
-    mov byte [rdi+1], ':'
-    add rdi, 2
     mov rax, r12
     mov ecx, 2
     call itoa_pad

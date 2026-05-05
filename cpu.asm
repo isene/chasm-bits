@@ -14,8 +14,10 @@
 section .data
 proc_stat:    db "/proc/stat", 0
 proc_load:    db "/proc/loadavg", 0
-prefix:       db "C: "
-prefix_len    equ $ - prefix
+; "C: " prefix removed 2026-05-05 — strip's segment colour
+; distinguishes the cpu segment from disk/etc.
+prefix:       db ""
+prefix_len    equ 0
 
 ; Sensor names (newline-terminated to match what /sys writes). Walk in
 ; order; first match wins. INT3400 / acpitz / TZ00 are Dell-style

@@ -12,8 +12,9 @@
 section .data
 path_cur: db "/sys/class/backlight/intel_backlight/brightness", 0
 path_max: db "/sys/class/backlight/intel_backlight/max_brightness", 0
-prefix:   db 0xE2, 0x98, 0xBC          ; UTF-8 ☼ (BLACK SUN WITH RAYS)
-prefix_len equ 3
+; ☼ glyph dropped 2026-05-05 — segment colour distinguishes brightness.
+prefix:   db ""
+prefix_len equ 0
 
 section .bss
 buf:     resb 32
@@ -37,16 +38,12 @@ _start:
     xor edx, edx
     div r13                             ; eax = percent
 
-    ; Format "☼N%\n" into out_buf (itoa advances rdi in place).
+    ; Format "N\n" into out_buf — ☼ and trailing % dropped (segment
+    ; colour distinguishes brightness in strip; the digit alone is
+    ; understood as a percent).
     lea rdi, [out_buf]
-    mov byte [rdi], 0xE2
-    mov byte [rdi+1], 0x98
-    mov byte [rdi+2], 0xBC
-    add rdi, 3
     mov ecx, 3
     call itoa_pad
-    mov byte [rdi], '%'
-    inc rdi
     mov byte [rdi], 10
     inc rdi
     lea rdx, [out_buf]

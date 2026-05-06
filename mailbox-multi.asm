@@ -45,7 +45,7 @@ sgr_P:    db 27, "[38;2;206;143;251m"
 sgr_P_len equ $ - sgr_P
 sgr_D:    db 27, "[38;2;81;193;183m"
 sgr_D_len equ $ - sgr_D
-sgr_dim:  db 27, "[38;2;153;153;153m"
+sgr_dim:  db 27, "[38;2;85;85;85m"     ; #555555 — empty mailbox
 sgr_dim_len equ $ - sgr_dim
 sgr_reset: db 27, "[0m"
 sgr_reset_len equ $ - sgr_reset

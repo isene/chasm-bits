@@ -1,6 +1,6 @@
 # chasm-bits — the asmites
 
-![Version](https://img.shields.io/badge/version-0.1.0-blue) ![Assembly](https://img.shields.io/badge/language-x86__64%20Assembly-purple) ![License](https://img.shields.io/badge/license-Unlicense-green) ![Platform](https://img.shields.io/badge/platform-Linux%20x86__64-blue) ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
+![Version](https://img.shields.io/badge/version-0.1.1-blue) ![Assembly](https://img.shields.io/badge/language-x86__64%20Assembly-purple) ![License](https://img.shields.io/badge/license-Unlicense-green) ![Platform](https://img.shields.io/badge/platform-Linux%20x86__64-blue) ![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen)
 
 Tiny per-segment programs for the [`strip`](https://github.com/isene/tile)
 status bar. Part of the [CHasm](https://github.com/isene/chasm) suite.

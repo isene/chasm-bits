@@ -101,17 +101,41 @@ _start:
     mov rbx, rax
 .have_units:
 
-    ; Format the output. When charging, wrap the whole line in a
-    ; light-blue SGR (#5599ff) — matches the user's conky scheme so a
-    ; charging laptop is instantly distinguishable. strip parses ANSI
-    ; SGR including 24-bit RGB.
+    ; Format the output. Pick a colour SGR based on state:
+    ;   Charging          → light blue   (#5599ff)
+    ;   Discharging <  8% → red/orange   (#ff5500)
+    ;   Discharging < 15% → muted yellow (#cccc55)
+    ;   else              → no SGR; segment fg from striprc applies.
+    ; The reset SGR is emitted at end-of-line iff a colour was set so
+    ; the next segment starts on its own colour.
     lea rdi, [out_buf]
+    xor r9d, r9d                           ; r9 = 1 if we emitted a colour
     cmp r13b, 'C'
-    jne .no_charge_color
+    jne .check_low
     mov rsi, .charge_sgr
     mov rcx, .charge_sgr_len
     rep movsb
-.no_charge_color:
+    mov r9d, 1
+    jmp .colour_done
+.check_low:
+    cmp r13b, 'D'
+    jne .colour_done
+    cmp r12, 8
+    jge .check_warn
+    mov rsi, .crit_sgr
+    mov rcx, .crit_sgr_len
+    rep movsb
+    mov r9d, 1
+    jmp .colour_done
+.check_warn:
+    cmp r12, 15
+    jge .colour_done
+    mov rsi, .warn_sgr
+    mov rcx, .warn_sgr_len
+    rep movsb
+    mov r9d, 1
+.colour_done:
+    push r9                                 ; remember for the trailing reset
     mov al, r13b
     mov [rdi], al
     inc rdi
@@ -186,10 +210,10 @@ _start:
     inc rdi
 .skip_watts:
 
-    ; Close the charging colour span before the LF so the next segment
-    ; in the bar starts on its own colour.
-    cmp r13b, 'C'
-    jne .no_reset_sgr
+    ; Close any colour span we opened (charging / low / critical).
+    pop r9
+    test r9d, r9d
+    jz .no_reset_sgr
     mov rsi, .reset_sgr
     mov rcx, .reset_sgr_len
     rep movsb
@@ -209,10 +233,13 @@ _start:
     xor edi, edi
     syscall
 
-; Charging-state SGR span. 24-bit RGB foreground = 0x5599ff, matches
-; the conky `${if_match Charging}` colour the user had before.
-.charge_sgr:     db 0x1b, "[38;2;85;153;255m"
+; Per-state SGR spans. 24-bit RGB foregrounds, parsed by strip.
+.charge_sgr:     db 0x1b, "[38;2;85;153;255m"      ; charging — light blue
 .charge_sgr_len  equ $ - .charge_sgr
+.warn_sgr:       db 0x1b, "[38;2;204;204;85m"      ; <15% — muted yellow
+.warn_sgr_len    equ $ - .warn_sgr
+.crit_sgr:       db 0x1b, "[38;2;255;85;0m"        ; <8%  — red/orange
+.crit_sgr_len    equ $ - .crit_sgr
 .reset_sgr:      db 0x1b, "[0m"
 .reset_sgr_len   equ $ - .reset_sgr
 

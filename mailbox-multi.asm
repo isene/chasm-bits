@@ -1,12 +1,12 @@
 ; ════════════════════════════════════════════════════════════════════════
-; mailbox-multi — read ~/.mail2 once and print colour-coded counts for
+; mailbox-multi — read ~/.mail once and print colour-coded counts for
 ; multiple mailboxes in a single fork.
 ;
 ; Usage:
 ;   mailbox-multi [--dot] LETTERS
 ;
 ;   LETTERS = one-char-per-mailbox string, e.g. "GPD".  Each letter
-;   should match a line "X:N" in ~/.mail2.
+;   should match a line "X:N" in ~/.mail.
 ;
 ;   --dot prepends a "." (or " " when ~/.mail.lock is absent) to the
 ;   FIRST letter, so the user can see when gmail_fetch is currently
@@ -33,7 +33,7 @@
 %define SYS_EXIT   60
 
 section .data
-mail_path: db "/home/geir/.mail2", 0
+mail_path: db "/home/geir/.mail", 0
 lock_path: db "/home/geir/.mail.lock", 0
 
 ; 24-bit RGB SGR escapes (matches the existing mailbox.asm palette).
@@ -51,7 +51,7 @@ sgr_reset: db 27, "[0m"
 sgr_reset_len equ $ - sgr_reset
 
 section .bss
-mail_buf:  resb 256                ; ~/.mail2 contents
+mail_buf:  resb 256                ; ~/.mail contents
 out_buf:   resb 512                ; assembled output
 dot_state: resb 1                  ; 1 = lock present, 0 = not
 
@@ -109,7 +109,7 @@ _start:
     ; rdi → letters string. r12 = saved letters ptr.
     mov r12, rdi
 
-    ; Read ~/.mail2 once into mail_buf.
+    ; Read ~/.mail once into mail_buf.
     mov rax, SYS_OPEN
     lea rdi, [mail_path]
     xor esi, esi

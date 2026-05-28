@@ -1,9 +1,9 @@
-; mailbox - print a single mailbox count line from ~/.mail2 with
+; mailbox - print a single mailbox count line from ~/.mail with
 ; per-mailbox SGR colour. Usage:  mailbox <letter>
 ; e.g. mailbox G  →  ANSI-coloured "G:N\n"
 ; If the value is 0 the colour switches to dim grey instead.
 ;
-; ~/.mail2 is a flat text file (one mailbox per line) maintained by
+; ~/.mail is a flat text file (one mailbox per line) maintained by
 ; the user's gmail_fetch script; this program does NOT do any IMAP.
 ;
 ; Build: nasm -f elf64 mailbox.asm -o mailbox.o && ld mailbox.o -o mailbox
@@ -15,7 +15,7 @@
 %define SYS_EXIT   60
 
 section .data
-mail_path: db "/home/geir/.mail2", 0
+mail_path: db "/home/geir/.mail", 0
 lock_path: db "/home/geir/.mail.lock", 0
 dot_str:   db "."
 dot_len    equ $ - dot_str
@@ -100,7 +100,7 @@ _start:
     pop rbx
 .no_dot:
 
-    ; Open + read ~/.mail2.
+    ; Open + read ~/.mail.
     mov rax, SYS_OPEN
     lea rdi, [mail_path]
     xor esi, esi

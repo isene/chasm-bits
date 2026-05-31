@@ -1,8 +1,13 @@
-; battery - print "<S> NN% N.Nh N.NNW" matching conky's battery line.
+; battery - print "<S> NN% N.Nh N.NNW[ G]" matching conky's battery line.
 ;   S = D (discharging) / C (charging) / F (full) / N (not charging)
 ;   NN% = capacity
 ;   N.Nh = hours of runtime left (only if discharging)
 ;   N.NNW = current power draw
+;   G = optional wifi power_save glyph appended at end:
+;       'V' (V-down ▼) when power_save is ON (battery-saver, iwlwifi
+;       freeze risk). Absent when OFF (default stable mode) or unknown.
+;       Source: /run/user/$UID/wifi-pwrsave, 1 byte ('1'=ON, '0'=OFF),
+;       written by ~/bin/wifi-pwrsave-state and wifi-stability-toggle.
 ; Uses /sys/class/power_supply/BAT0/{capacity,status,power_now,energy_now}.
 ; Optional argv[1] = battery name (default "BAT0").
 ;
@@ -13,6 +18,7 @@
 %define SYS_OPEN   2
 %define SYS_CLOSE  3
 %define SYS_EXIT   60
+%define SYS_GETUID 102
 
 section .data
 sys_pre:    db "/sys/class/power_supply/", 0
@@ -25,15 +31,58 @@ suf_energy: db "/energy_now", 0
 suf_volt:   db "/voltage_now", 0
 suf_curr:   db "/current_now", 0
 suf_charge: db "/charge_now", 0
+run_user_pre:        db "/run/user/"
+run_user_pre_len     equ $ - run_user_pre
+wifi_pwrsave_suf:    db "/wifi-pwrsave", 0
+wifi_pwrsave_suf_len equ $ - wifi_pwrsave_suf
 
 section .bss
-path_buf: resb 256
-read_buf: resb 64
-out_buf:  resb 64
+path_buf:   resb 256
+read_buf:   resb 64
+out_buf:    resb 64
+wifi_path:  resb 64
+wifi_state: resb 1
 
 section .text
 global _start
 _start:
+    ; Read wifi power-save state (1 byte from /run/user/<uid>/wifi-pwrsave).
+    ; wifi_state stays 0 (BSS zero-init) on any failure: missing tmpfs,
+    ; missing file, short read. Cost when file is absent: getuid + open
+    ; (ENOENT) — ~2 syscalls, no extra wakeups.
+    lea rdi, [wifi_path]
+    lea rsi, [run_user_pre]
+    mov ecx, run_user_pre_len
+    rep movsb
+    mov rax, SYS_GETUID
+    syscall
+    call itoa                             ; appends decimal uid, advances rdi
+    lea rsi, [wifi_pwrsave_suf]
+    mov ecx, wifi_pwrsave_suf_len
+    rep movsb                             ; copies "/wifi-pwrsave" + NUL
+    mov rax, SYS_OPEN
+    lea rdi, [wifi_path]
+    xor esi, esi                          ; O_RDONLY
+    xor edx, edx
+    syscall
+    test rax, rax
+    js .wifi_done
+    mov rbx, rax                          ; fd
+    mov rax, SYS_READ
+    mov rdi, rbx
+    lea rsi, [read_buf]
+    mov rdx, 1
+    syscall
+    mov r9, rax                           ; bytes read
+    mov rax, SYS_CLOSE
+    mov rdi, rbx
+    syscall
+    cmp r9, 1
+    jne .wifi_done
+    mov al, [read_buf]
+    mov [wifi_state], al
+.wifi_done:
+
     ; Pick battery name from argv[1] or default.
     mov rdi, [rsp]
     cmp rdi, 2
@@ -218,6 +267,19 @@ _start:
     mov rcx, .reset_sgr_len
     rep movsb
 .no_reset_sgr:
+
+    ; Wifi power-save indicator: " ▼" when battery-saver opted-in (the
+    ; freeze-risk mode). Absent when stable (default) or state unknown,
+    ; so the indicator is silent unless the user has actively chosen the
+    ; risky mode. Placed after the colour reset so it inherits segment fg.
+    cmp byte [wifi_state], '1'
+    jne .no_wifi_glyph
+    mov byte [rdi],   ' '
+    mov byte [rdi+1], 0xE2                ; U+25BC ▼ = E2 96 BC
+    mov byte [rdi+2], 0x96
+    mov byte [rdi+3], 0xBC
+    add rdi, 4
+.no_wifi_glyph:
 
     mov byte [rdi], 10
     inc rdi

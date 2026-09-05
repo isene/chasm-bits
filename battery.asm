@@ -4,8 +4,10 @@
 ;   N.Nh = hours of runtime left (only if discharging)
 ;   N.NNW = current power draw
 ;   G = optional wifi power_save glyph appended at end:
-;       'V' (V-down ▼) when power_save is ON (battery-saver, iwlwifi
-;       freeze risk). Absent when OFF (default stable mode) or unknown.
+;       ▲ when power_save is OFF, i.e. the radio never sleeps and costs
+;       ~50-200 mW. Absent when ON (the default since 2026-09-05) or
+;       unknown, so the glyph appears only when the saving default has
+;       been overridden — silence is the good state.
 ;       Source: /run/user/$UID/wifi-pwrsave, 1 byte ('1'=ON, '0'=OFF),
 ;       written by ~/bin/wifi-pwrsave-state and wifi-stability-toggle.
 ; Uses /sys/class/power_supply/BAT0/{capacity,status,power_now,energy_now}.
@@ -268,16 +270,17 @@ _start:
     rep movsb
 .no_reset_sgr:
 
-    ; Wifi power-save indicator: " ▼" when battery-saver opted-in (the
-    ; freeze-risk mode). Absent when stable (default) or state unknown,
-    ; so the indicator is silent unless the user has actively chosen the
-    ; risky mode. Placed after the colour reset so it inherits segment fg.
-    cmp byte [wifi_state], '1'
+    ; Wifi power-save indicator: " ▲" when power_save is OFF — the radio
+    ; stays awake and burns ~50-200 mW. Absent when ON (the default) or
+    ; when the state is unknown (wifi_state is BSS zero, not '0'), so the
+    ; glyph shows only where the saving default was overridden. Placed
+    ; after the colour reset so it inherits segment fg.
+    cmp byte [wifi_state], '0'
     jne .no_wifi_glyph
     mov byte [rdi],   ' '
-    mov byte [rdi+1], 0xE2                ; U+25BC ▼ = E2 96 BC
+    mov byte [rdi+1], 0xE2                ; U+25B2 ▲ = E2 96 B2
     mov byte [rdi+2], 0x96
-    mov byte [rdi+3], 0xBC
+    mov byte [rdi+3], 0xB2
     add rdi, 4
 .no_wifi_glyph:
 

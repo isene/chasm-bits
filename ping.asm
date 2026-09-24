@@ -1,7 +1,8 @@
-; ping - print average ping ms (rounded, right-padded to 4 chars).
-; Replaces the user's pingavg.rb. Forks /usr/bin/ping -c3 -W1 <host>
-; (default 8.8.8.8 if no argv[1]), captures stdout, parses the
-; "rtt min/avg/max/mdev = X/Y/Z/W ms" line, prints rounded Y.
+; ping - print average ping ms, rounded, right-aligned in 3 characters;
+; 1000 ms and up shows as "1K", rounded to the nearest thousand.
+; Forks /usr/bin/ping -c3 -W1 <host> (default 8.8.8.8), captures stdout,
+; parses the "rtt min/avg/max/mdev = X/Y/Z/W ms" line, prints rounded Y.
+; --updown appends a ↕ mark after the number.
 ;
 ; Build: nasm -f elf64 ping.asm -o ping.o && ld ping.o -o ping
 
@@ -21,27 +22,48 @@ ping_arg0: db "ping", 0
 ping_argc: db "-c3", 0
 ping_argw: db "-W1", 0
 default_host: db "8.8.8.8", 0
-miss_str:  db "   -", 10
+miss_str:  db "  -"
 miss_len   equ $ - miss_str
+updown_flag: db "--updown", 0
 needle:    db "min/avg/max/mdev = "
 needle_len equ $ - needle
 
 section .bss
 buf:     resb 4096
 out_buf: resb 16
+num_buf: resb 16
+updown:  resb 1
 
 section .text
 global _start
 _start:
-    ; Pick host = argv[1] or default.
-    mov rdi, [rsp]
-    cmp rdi, 2
-    jl .use_default_host
-    mov r15, [rsp + 16]
-    jmp .have_host
-.use_default_host:
+    ; Arguments: --updown sets the mark, anything else is the host.
     lea r15, [default_host]
-.have_host:
+    lea r13, [rsp + 16]                   ; argv[1]
+.arg_loop:
+    mov rsi, [r13]
+    test rsi, rsi
+    jz .args_done
+    lea rdi, [updown_flag]
+    mov rdx, rsi
+.arg_cmp:
+    mov al, [rdx]
+    cmp al, [rdi]
+    jne .arg_host
+    test al, al
+    jz .arg_updown
+    inc rdx
+    inc rdi
+    jmp .arg_cmp
+.arg_updown:
+    mov byte [updown], 1
+    jmp .arg_next
+.arg_host:
+    mov r15, rsi
+.arg_next:
+    add r13, 8
+    jmp .arg_loop
+.args_done:
 
     ; pipe()
     sub rsp, 16
@@ -164,47 +186,37 @@ _start:
     jb .have_avg
     inc eax                               ; round up
 .have_avg:
-    ; eax = rounded integer ms. Format right-padded to 4 chars + LF.
-    mov r12d, eax                         ; preserve original value
-    ; Count decimal digits.
-    mov ecx, 1
-    mov eax, r12d
-    test eax, eax
-    jz .ld_done
-    xor ecx, ecx
-.ld_loop:
-    inc ecx
+    ; eax = rounded integer ms. At most 3 characters, right-aligned:
+    ; 1000 ms and up becomes "1K", rounded to the nearest thousand.
+    lea rdi, [num_buf]
+    cmp eax, 1000
+    jb .fmt_ms
+    add eax, 500
     xor edx, edx
-    mov esi, 10
-    div esi
-    test eax, eax
-    jnz .ld_loop
-.ld_done:
-    ; ecx = digit count. Pad to 4.
+    mov ecx, 1000
+    div ecx
+    call itoa
+    mov byte [rdi], 'K'
+    inc rdi
+    jmp .fmt_have
+.fmt_ms:
+    call itoa
+.fmt_have:
+    lea rsi, [num_buf]
+    mov rcx, rdi
+    sub rcx, rsi                          ; text length
     lea rdi, [out_buf]
-    mov edx, 4
+    mov edx, 3
     sub edx, ecx
-    jle .write_digits
+    jle .copy_num
 .pad_loop:
-    test edx, edx
-    jz .write_digits
     mov byte [rdi], ' '
     inc rdi
     dec edx
-    jmp .pad_loop
-.write_digits:
-    mov eax, r12d
-    call itoa
-    mov byte [rdi], 10
-    inc rdi
-    lea rdx, [out_buf]
-    sub rdi, rdx
-    mov rdx, rdi
-    mov rax, SYS_WRITE
-    mov rdi, 1
-    lea rsi, [out_buf]
-    syscall
-    jmp .die
+    jnz .pad_loop
+.copy_num:
+    rep movsb
+    jmp .finish
 
 .miss_close_both:
     mov rax, SYS_CLOSE
@@ -214,10 +226,27 @@ _start:
     mov edi, r12d
     syscall
 .miss:
+    lea rdi, [out_buf]
+    lea rsi, [miss_str]
+    mov ecx, miss_len
+    rep movsb
+.finish:
+    ; --updown appends the ↕ mark (U+2195), then the line ends.
+    cmp byte [updown], 0
+    je .no_mark
+    mov byte [rdi], 0xE2
+    mov byte [rdi + 1], 0x86
+    mov byte [rdi + 2], 0x95
+    add rdi, 3
+.no_mark:
+    mov byte [rdi], 10
+    inc rdi
+    lea rdx, [out_buf]
+    sub rdi, rdx
+    mov rdx, rdi
     mov rax, SYS_WRITE
     mov rdi, 1
-    lea rsi, [miss_str]
-    mov rdx, miss_len
+    lea rsi, [out_buf]
     syscall
 .die:
     mov rax, SYS_EXIT

@@ -95,8 +95,9 @@ walk envp first (skip), then walk argv looking for known flag strings.
 | `battery`    | `/sys/class/power_supply/BAT*/`              |
 | `brightness` | `/sys/class/backlight/*/brightness`          |
 | `ip`         | `getaddrinfo` via `/etc/resolv.conf` parse   |
+| `net`        | nl80211 netlink; curl only on network change |
 | `moonphase`  | computed from the date                       |
-| `ping`       | fork + exec /bin/ping, parse output          |
+| `ping`       | fork + exec /bin/ping; 3 chars, `--updown` ↕ |
 | `pingok`     | shorter form, just ✓/✗                       |
 | `mailbox`    | walks a maildir                              |
 | `mailfetch`  | counts new mail since last run               |

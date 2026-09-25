@@ -11,6 +11,13 @@
 ; once for a 10 MB speed test. The line printed now uses the old caches;
 ; the next run shows the new values.
 ;
+; Captive portals: until the IP lookup gets a real address, the IP reads
+; "offline" and the lookup is retried every run (30 s). A new network's
+; line never shows the old network's IP. When a lookup succeeds, the
+; child sends strip SIGURG, so strip reruns every segment at once: the IP
+; and the ping appear within seconds of getting through the portal. The
+; speed test waits until the Internet works.
+;
 ; Replaces a bash net-status + essid.sh + netspeed.sh that started 21
 ; programs and used 86 ms of CPU every 30 s, and asked ifconfig.me for
 ; the IP about once a minute, waking the wifi radio each time.
@@ -32,8 +39,11 @@
 %define SYS_EXIT    60
 %define SYS_WAIT4   61
 %define SYS_UNLINK  87
+%define SYS_KILL    62
+%define SYS_GETPPID 110
 %define SYS_SETSID  112
 
+%define SIGURG      23
 %define O_RDWR      2
 %define O_WRONLY    1
 %define O_CREAT     0x40
@@ -86,6 +96,7 @@ sta_req:
     dw 8, NL80211_ATTR_IFINDEX
     dd 0
 
+offline:     db "offline", 10
 ip_cache:    db "/tmp/strip_ip_cache", 0
 speed_cache: db "/tmp/strip_speed_cache", 0
 ssid_cache:  db "/tmp/strip_last_ssid", 0
@@ -115,6 +126,8 @@ sp_argv:     dq a_curl, a_4, a_s, a_w, a_fmt, a_o, dev_null, a_mt, a_10, sp_url,
 
 section .bss
 envp:        resq 1
+strip_pid:   resd 1                ; our parent when it is strip, else 0
+procpath:    resb 32
 nlfd:        resd 1
 family:      resd 1
 ifindex:     resd 1
@@ -147,12 +160,33 @@ _start:
     call key_changed               ; eax = 1 if the network changed
     test eax, eax
     jz .print
+    ; The last network's IP must not show as if we were online. An
+    ; "offline" from a failed lookup stays until one succeeds.
+    lea rdi, [ip_cache]
+    lea rsi, [curlbuf]
+    mov edx, 32
+    call read_file
+    call valid_ip
+    test eax, eax
+    jz .keep_ip
+    mov eax, SYS_UNLINK
+    lea rdi, [ip_cache]
+    syscall
+.keep_ip:
     lea rdi, [key_path]
     lea rsi, [key_cur]
     mov edx, [key_len]
     call write_file                ; claim it first: no second refresh
     cmp dword [ssid_len], 0
     je .print                      ; no wifi: nothing to look up
+    call ssid_is_new               ; the last network's speed is not ours
+    test eax, eax
+    jz .keep_speed
+    mov eax, SYS_UNLINK
+    lea rdi, [speed_cache]
+    syscall
+.keep_speed:
+    call find_strip
     call spawn_refresh
 .print:
     call format_line               ; rdx = bytes in out
@@ -516,28 +550,25 @@ spawn_refresh:
     lea rdi, [ip_cache]
     lea rsi, [curlbuf]
     call write_file
+    call poke_strip                ; show the IP and a fresh ping now
     jmp .sr_speed
 .sr_ip_fail:
-    mov eax, SYS_UNLINK            ; forget the key: retry on the next run
+    ; No Internet yet (a captive portal, or none at all): say so, and
+    ; forget the key so the next run tries again. No speed test.
+    lea rdi, [ip_cache]
+    lea rsi, [offline]
+    mov edx, 8
+    call write_file
+    mov eax, SYS_UNLINK
     lea rdi, [key_path]
     syscall
+    jmp .sr_exit
 
 .sr_speed:
     ; Speed test only when the SSID itself changed, not for a VPN switch.
-    lea rdi, [ssid_cache]
-    lea rsi, [filebuf]
-    mov edx, 40
-    call read_file
-    mov ecx, [ssid_len]
-    lea edx, [ecx + 1]
-    cmp eax, edx
-    jne .sr_new_ssid
-    cmp byte [filebuf + rcx], 10
-    jne .sr_new_ssid
-    lea rsi, [ssid]
-    lea rdi, [filebuf]
-    repe cmpsb
-    je .sr_exit
+    call ssid_is_new
+    test eax, eax
+    jz .sr_exit
 .sr_new_ssid:
     mov ecx, [ssid_len]
     lea rsi, [ssid]
@@ -587,6 +618,7 @@ spawn_refresh:
     sub rdx, rsi
     lea rdi, [speed_cache]
     call write_file
+    call poke_strip
 .sr_exit:
     mov eax, SYS_EXIT
     xor edi, edi
@@ -665,6 +697,70 @@ run_curl:
     pop r13
     pop r12
     pop rbx
+    ret
+
+; find_strip - strip_pid = our parent if it is strip (strip execs us
+; directly, so its /proc comm reads "strip" or "tile-strip"), else 0.
+; Run by hand from a shell, net must not signal that shell.
+find_strip:
+    push r12
+    mov eax, SYS_GETPPID
+    syscall
+    mov r12d, eax
+    lea rdi, [procpath]
+    mov dword [rdi], '/pro'
+    mov word [rdi + 4], 'c/'
+    add rdi, 6
+    call put_uint
+    mov dword [rdi], '/com'
+    mov word [rdi + 4], 'm'
+    lea rdi, [procpath]
+    lea rsi, [filebuf]
+    mov edx, 32
+    call read_file
+    cmp eax, 6
+    jb .fs_ret
+    cmp dword [filebuf + rax - 6], 'stri'
+    jne .fs_ret
+    cmp word [filebuf + rax - 2], 0x0A70   ; "p\n"
+    jne .fs_ret
+    mov [strip_pid], r12d
+.fs_ret:
+    pop r12
+    ret
+
+; ssid_is_new - eax = 1 when the wifi name differs from the one the last
+; speed test was for (ssid_cache), else 0.
+ssid_is_new:
+    lea rdi, [ssid_cache]
+    lea rsi, [filebuf]
+    mov edx, 40
+    call read_file
+    mov ecx, [ssid_len]
+    lea edx, [ecx + 1]
+    cmp eax, edx
+    jne .sn_yes
+    cmp byte [filebuf + rcx], 10
+    jne .sn_yes
+    lea rsi, [ssid]
+    lea rdi, [filebuf]
+    repe cmpsb
+    jne .sn_yes
+    xor eax, eax
+    ret
+.sn_yes:
+    mov eax, 1
+    ret
+
+; poke_strip - SIGURG to strip: rerun every segment now.
+poke_strip:
+    mov edi, [strip_pid]
+    test edi, edi
+    jz .pk_ret
+    mov eax, SYS_KILL
+    mov esi, SIGURG
+    syscall
+.pk_ret:
     ret
 
 ; eax = bytes in curlbuf. Returns eax = length of the leading IPv4
@@ -775,12 +871,23 @@ format_line:
     lea rsi, [curlbuf]
     mov edx, 32
     call read_file
-    call valid_ip
+    call valid_ip                  ; (r8d = bytes read)
     pop rdi
     test eax, eax
-    jz .fl_ip_dots
+    jz .fl_ip_none
     mov ecx, eax
     lea rsi, [curlbuf]
+    rep movsb
+    jmp .fl_ip_done
+.fl_ip_none:
+    cmp r8d, 7
+    jb .fl_ip_dots
+    cmp dword [curlbuf], 'offl'
+    jne .fl_ip_dots
+    cmp dword [curlbuf + 3], 'line'
+    jne .fl_ip_dots
+    lea rsi, [offline]
+    mov ecx, 7
     rep movsb
     jmp .fl_ip_done
 .fl_ip_dots:

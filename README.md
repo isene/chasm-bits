@@ -28,7 +28,7 @@ strip parses them and switches GC foreground per text-run.
 | mem     | `/proc/meminfo`                                | available memory %             |
 | disk    | `statfs(2)` on `/`                             | free disk %                    |
 | ip      | `/proc/net/route` + `/proc/net/fib_trie`       | primary IPv4                   |
-| net     | nl80211 (generic netlink) + cache files      | wifi name, public IP, signal %, speed; forks curl only when the network or VPN changes |
+| net     | nl80211 (generic netlink) + cache files      | wifi name, public IP, signal %, speed; forks curl only when the network or VPN changes. Shows `offline` behind a captive portal and asks strip to refresh the moment the Internet works |
 | ping    | forks `ping -c3`, parses the average           | ping ms in 3 characters (1K above 999); `--updown` adds ↕ |
 | sep     | (no input)                                     | colored separator glyph        |
 | wintitle| X11 GetInputFocus + GetProperty(_NET_WM_NAME)  | focused window title — `--length N` truncates with mid-string `…` AND right-pads with spaces so the segment occupies a constant width (lets you put it leftmost without the rest of the bar shifting around) |
